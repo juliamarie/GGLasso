@@ -8,7 +8,8 @@ from rpy2.robjects.conversion import localconverter
 
 from gglasso.helper import tagl_admm_helper as tl
 from gglasso.solver.ggl_helper import prox_1norm
-#from gglasso.solver.single_admm_solver import ADMM_SGL
+
+# from gglasso.solver.single_admm_solver import ADMM_SGL
 
 
 usethis = importr('usethis')
@@ -16,9 +17,8 @@ devtools = importr('devtools')
 taglasso = importr('taglasso')
 
 
-
-def admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om0, Gam0):
-    assert (np.linalg.norm(p)>=1e-10), "Dimension of the problem should be greater than 0"
+def admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om0, Gam0, stat, eps_abs, eps_rel=1e-3):
+    assert (np.linalg.norm(p) >= 1e-10), "Dimension of the problem should be greater than 0"
     # initialize
     U1 = Om0.copy()
     U2 = Om0.copy()
@@ -48,9 +48,13 @@ def admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om0, Gam0):
     C = J - Atilde @ AtildeInv @ np.transpose(A)  # p+TxT = p+TxT TxT Txp
 
     for k in range(t):
-        #print(rho, k)
+        # print(rho, k)
 
-        #Update for \Omega^{(1)}
+        # copy of last iterate
+        Om_old = Om.copy()
+        Gam_old = Gam.copy()
+
+        # Update for \Omega^{(1)}
         rhs = (rho * Om) - U1 - S
         rhs = (rhs + rhs.T) / 2
         # print(np.transpose((rho * Om) - U1 - S))
@@ -58,65 +62,80 @@ def admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om0, Gam0):
         w, Q = np.linalg.eigh(rhs)
         delta_omega = tl.get_eigenvalues(w, p, rho)
         Om1 = Q @ delta_omega @ Q.T
-        #print("Omega 1:", Om1)
+        # print("Omega 1:", Om1)
 
-        #Udate \Omega^{(3)} by soft-thresholding
+        # Udate \Omega^{(3)} by soft-thresholding
         Om3 = prox_1norm(Om - U3 / rho, lam2 / rho)
-        #print("Omega 3: ", Om3)
+        print("Omega 3: ", Om3)
 
-        #Update \Gamma^{(1)} by groupwise soft-thresholding
+        # Update \Gamma^{(1)} by groupwise soft-thresholding
         for i in range(0, p - 1):
             Gam1[i] = tl.groupwise_st(Gam[i] - U4[i] / rho, lam1 / rho)
         Gam1[p - 1] = tl.vector_avrg(Gam[0] - U4[0] / rho, p)
-        #print("Gamma 1: ", Gam1)
+        # print("Gamma 1: ", Gam1)
 
-        #Update D, \Gamma^{(2)} and \Omega^{(2)}
+        # Update D, \Gamma^{(2)} and \Omega^{(2)}
         Mtilde = np.zeros((T + p, p))
         Mtilde[:p] = Om - U2 / rho
         Mtilde[p:] = Gam - U5 / rho
         B = np.matmul(np.identity(p + T) - np.matmul(Atilde, np.matmul(AtildeInv, np.transpose(Atilde))), Mtilde)
         D = np.linalg.inv(tl.diag(np.matmul(np.transpose(C), C), p)) * tl.diag_max(np.matmul(np.transpose(B), C), p)
-        #print("D:", D)
+        # print("D:", D)
         assert (D >= -1e-12).all(), "D should have only positive entries"
         Dtilde = np.zeros((p + T, p))
         Dtilde[:p] = D
         Gam2 = np.matmul(AtildeInv, np.matmul(np.transpose(Atilde), Mtilde - Dtilde))
-        #print("Gamma 2: ", Gam2)
+        # print("Gamma 2: ", Gam2)
         Om2 = np.matmul(A, Gam2) + D
-        #print("Omega 2: ", Om2)
+        # print("Omega 2: ", Om2)
 
-        #Update \Omega
+        # Update \Omega
         Om = (Om1 + Om2 + Om3) / 3
-        #print("Omega: ", Om)
+        # print("Omega: ", Om)
 
-        #Update \Gamma
+        # Update \Gamma
         Gam = (Gam1 + Gam2) / 2
-        #print("Gamma: ", Gam)
+        # print("Gamma: ", Gam)
 
-        #Update U1, U2, U3, U4 and U5
+        # Update U1, U2, U3, U4 and U5
         U1 = U1 + rho * (Om1 - Om)
-        #print("U 1: ", U1)
+        # print("U 1: ", U1)
         U2 = U2 + rho * (Om2 - Om)
-        #print("U 2: ", U2)
+        # print("U 2: ", U2)
         U3 = U3 + rho * (Om3 - Om)
-        #print("U 3: ", U3)
+        # print("U 3: ", U3)
         U4 = U4 + rho * (Gam1 - Gam)
-        #print("U 4: ", U4)
+        # print("U 4: ", U4)
         U5 = U5 + rho * (Gam2 - Gam)
-        #print("U 5: ", U5)
+        # print("U 5: ", U5)
+
+        s = tl.s_k(Om, Gam, Om_old, Gam_old, rho)
+        r = tl.r_k(Om1, Om2, Om3, Gam1, Gam2, Om, Gam)
+        eps_pri = tl.eps_pri(Om1, Om2, Om3, Gam1, Gam2, Om, Gam, eps_abs, eps_rel)
+        eps_dual = tl.eps_dual(U1, U2, U3, U4, U5, eps_abs, eps_rel)
+        print(rho)
+        #print(np.linalg.norm(r))
+
+        if (np.linalg.norm(r) <= eps_pri and np.linalg.norm(s) <= eps_dual):
+            stat = 1
+            break
 
     return Om, Gam, D
 
 
-def la_admm_tagl(S, A, p, T, lam1, lam2, rho, t, K):
+def la_admm_tagl(S, A, p, T, lam1, lam2, rho, t, K, eps_abs, eps_rel=1e-3):
     Om = np.zeros((p, p))
     Gam = np.zeros((T, p))
     D = np.zeros((p, p))
+    stat = 0
     for l in range(K):
-        Om, Gam, D = admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om, Gam)
+        Om, Gam, D = admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om, Gam, stat, eps_abs, eps_rel)
 
-        #Update penalty parameter
+        # Update penalty parameter
         rho = 2 * rho
+        if stat == 1:
+            print("ended in iteration: ", l)
+            break
     return Om, Gam, D
 
 
@@ -133,14 +152,10 @@ U = np.tril(M)
 S = np.matmul(U, np.transpose(U))
 sdf = pd.DataFrame(S)
 
-
 with localconverter(robjects.default_converter + pandas2ri.converter):
     r_s = robjects.conversion.py2rpy(sdf)
-r_vec = robjects.FloatVector([1.0, 0., 0., 0., 0., 1., 0., 0., 0., 0. ,1., 0., 0., 0., 0., 1.])
-r_a = robjects.r['matrix'](r_vec, nrow = 4)
-
-
-
+r_vec = robjects.FloatVector([1.0, 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.])
+r_a = robjects.r['matrix'](r_vec, nrow=4)
 
 A = np.zeros((p, T))
 A[:, :p] = np.identity(p)
@@ -155,15 +170,11 @@ adf = pd.DataFrame(A)
 #     r_a = robjects.conversion.py2rpy(adf)
 
 
-
-
 tag_lasso = robjects.r['taglasso']
 
-
-
 print("tag-lasso")
-print(la_admm_tagl(S, np.identity(p), p, p, lam1, lam2, rho, t, K))
-#print(la_admm_tagl(S, A, p, T, lam1, lam2, rho, t, K))
+print(la_admm_tagl(S, np.identity(p), p, p, lam1, lam2, rho, t, K, 1e0))
+# print(la_admm_tagl(S, A, p, T, lam1, lam2, rho, t, K))
 
 print("i dont care")
 
