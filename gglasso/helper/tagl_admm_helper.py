@@ -41,7 +41,7 @@ def diag(C, p):
 
 def diag_max(C, p):
     D = np.zeros((p, p))
-    np.fill_diagonal(D, np.diagonal(np.maximum(0, C)))
+    np.fill_diagonal(D, np.diagonal(np.maximum(0., C)))
     # for i in range(p):
     #     D[i][i] = np.maximum(0, C[i][i])
     return D
@@ -135,6 +135,26 @@ def eps_dual(U1, U2, U3, U4, U5, eps_abs, eps_rel=1e-3):
     y[3 * p + T:] = U5
     res = np.sqrt(n) * eps_abs + eps_rel * np.linalg.norm(A @ y)
     return res
+
+
+def A_precompute(A, p, T):
+    Atilde = np.zeros((p + T, T))
+    Atilde[:p] = A
+    Atilde[p:] = np.identity(T)
+
+    A_inv = np.linalg.inv(A.T @ A + np.identity(T))
+
+    A_for_gamma = A_inv @ Atilde.T
+
+    A_for_B = np.identity(p+T) - Atilde @ A_inv @ Atilde.T
+
+    J = np.zeros((p + T, p))
+    J[:p] = np.identity(p)
+    C = J - Atilde @ A_inv @ A.T
+
+    C_for_D = np.linalg.inv(diag(C, p))
+
+    return Atilde, A_for_gamma, A_for_B, C, C_for_D
 
 # # p=5
 # # rho=0.5
