@@ -67,8 +67,8 @@ def admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om0, Gam0, Atilde, A_for_gamma, A_
         # print("Omega 1:", Om1)
 
         # Udate \Omega^{(3)} by soft-thresholding
-        # Om3 = prox_1norm(Om - U3 / rho, lam2 / rho)
-        # o = Om - U3 / rho
+        Om3 = prox_1norm(Om - U3 / rho, lam2 / rho)
+        o = Om - U3 / rho
         for i in range(p):
             Om3[i][i] = o[i][i]
         print("Omega 3: ", Om3)
