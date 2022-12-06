@@ -17,9 +17,11 @@ devtools = importr('devtools')
 taglasso = importr('taglasso')
 
 
-def admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_for_D, stat, eps_abs, eps_rel=1e-4):
-    assert (np.linalg.norm(p) >= 1e-10), "Dimension of the problem should be greater than 0"
+def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_for_D, tol, rtol=1e-4):
     # initialize
+    stat = 0
+    p = len(S)
+    T = len(A[0])
     U1 = Om0.copy()
     U2 = Om0.copy()
     U3 = Om0.copy()
@@ -123,8 +125,8 @@ def admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C
 
         s = tl.s_k(Om, Gam, Om_old, Gam_old, rho)
         r = tl.r_k(Om1, Om2, Om3, Gam1, Gam2, Om, Gam)
-        eps_pri = tl.eps_pri(Om1, Om2, Om3, Gam1, Gam2, Om, Gam, eps_abs, eps_rel)
-        eps_dual = tl.eps_dual(U1, U2, U3, U4, U5, eps_abs, eps_rel)
+        eps_pri = tl.eps_pri(Om1, Om2, Om3, Gam1, Gam2, Om, Gam, tol, rtol)
+        eps_dual = tl.eps_dual(U1, U2, U3, U4, U5, tol, rtol)
         # print(rho)
         # print(np.linalg.norm(r))
 
@@ -137,14 +139,16 @@ def admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C
     return Om, Gam, D, stat, it
 
 
-def la_admm_tagl(S, A, p, T, lam1, lam2, rho, t, K, eps_abs, eps_rel=1e-3):
+def la_admm_tagl(S, A, lam1, lam2, rho, t, K, tol, rtol=1e-3):
+    p = len(S)
+    T = len(A[0])
     Om = np.zeros((p, p))
     Gam = np.zeros((T, p))
     D = np.zeros((p, p))
     Atilde, A_for_gamma, A_for_B, C, C_for_D = tl.A_precompute(A, p, T)
     stat = 0
     for l in range(K):
-        Om, Gam, D, stat, it = admm_tagl(S, A, p, T, lam1, lam2, rho, t, Om, Gam, A_for_gamma, A_for_B, C, C_for_D, stat, eps_abs, eps_rel)
+        Om, Gam, D, stat, it = admm_tagl(S, A, lam1, lam2, rho, t, Om, Gam, A_for_gamma, A_for_B, C, C_for_D, tol, rtol)
 
         # Update penalty parameter
         rho = 2 * rho

@@ -18,7 +18,7 @@ def test_example_tree_big_lambda2():
     S = np.zeros((5, 5))
     S[:3, :3] = W @ W.T
     S[3:, 3:] = V @ V.T
-    Omega, Gamma, D = la_admm_tagl(S, A, 5, 8, 1, 100, 1, 100, 10, 1e-5, 1e-5)
+    Omega, Gamma, D = la_admm_tagl(S, A, 1, 100, 1, 100, 10, 1e-5, 1e-5)
     for i in range(5):
         Omega[i][i] = 1
     assert_array_almost_equal(Omega, np.identity(5), 5)
@@ -38,7 +38,7 @@ def test_example_tree_big_lambda1():
     S = np.zeros((5, 5))
     S[:3, :3] = W @ W.T
     S[3:, 3:] = V @ V.T
-    Omega, Gamma, D = la_admm_tagl(S, A, 5, 8, 100, 1, 1, 100, 10, 1e-5, 1e-5)
+    Omega, Gamma, D = la_admm_tagl(S, A, 100, 1, 1, 100, 10, 1e-5, 1e-5)
     Omega2 = np.zeros((5, 5))
     Omega2.fill(Gamma[1][1])
     for i in range(5):
@@ -60,7 +60,7 @@ def test_example_tree_glasso():
     S = np.zeros((5, 5))
     S[:3, :3] = W @ W.T
     S[3:, 3:] = V @ V.T
-    Omega, Gamma, D = la_admm_tagl(S, A, 5, 8, 1e-7, 1, 1, 100, 10, 1e-7, 1e-4)
+    Omega, Gamma, D = la_admm_tagl(S, A, 1e-7, 1, 1, 100, 10, 1e-7, 1e-4)
     sol, info = ADMM_SGL(S, 1, np.zeros((5, 5)))
     Omega2 = sol.get('Omega')
     for i in range(5):
@@ -70,6 +70,24 @@ def test_example_tree_glasso():
     return
 
 
+def test():
+    A = np.zeros((5, 8))
+    A[:5, :5] = np.identity(5)
+    v = [1, 1, 1, 0, 0]
+    w = [0, 0, 0, 1, 1]
+    A[:, 5] = v
+    A[:, 6] = w
+    A[:, 7] = np.ones(5)
+    W = np.random.rand(2)
+    V = np.random.rand(3)
+    S = np.zeros((5, 5))
+    S[:3, :3] = W @ W.T
+    S[3:, 3:] = V @ V.T
+    print(la_admm_tagl(S, A, 1, 1, 1, 100, 10, 1e-7, 1e-4))
+    return
+
+
+test()
 test_example_tree_big_lambda2()
 test_example_tree_big_lambda1()
 test_example_tree_glasso()
