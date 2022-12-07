@@ -17,7 +17,7 @@ devtools = importr('devtools')
 taglasso = importr('taglasso')
 
 
-def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_for_D, tol, rtol=1e-4):
+def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_for_D, tol, rtol=1e-4, verbose=False):
     # initialize
     stat = 0
     p = len(S)
@@ -36,6 +36,12 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_fo
     Gam = Gam0.copy() #np.zeros((T, p))  # Gam0.copy()#np.ones((T,p))
     D = np.zeros((p, p))
     it = 100000
+
+    hdr_fmt = "%4s\t%10s\t%10s\t%10s\t%10s"
+    out_fmt = "%4d\t%10.4g\t%10.4g\t%10.4g\t%10.4g"
+    if verbose:
+        print("------------ADMM Algorithm for tag-lasso----------------")
+        print(hdr_fmt % ("iter", "r_t", "s_t", "eps_pri", "eps_dual"))
 
     # \tilde A for \Gamma^{(2)} and D
     # Atilde = np.zeros((p + T, T))
@@ -124,14 +130,20 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_fo
         # print("U 5: ", U5)
 
         s = tl.s_k(Om, Gam, Om_old, Gam_old, rho)
+        s_k = np.linalg.norm(s)
         r = tl.r_k(Om1, Om2, Om3, Gam1, Gam2, Om, Gam)
+        r_k = np.linalg.norm(r)
         eps_pri = tl.eps_pri(Om1, Om2, Om3, Gam1, Gam2, Om, Gam, tol, rtol)
         eps_dual = tl.eps_dual(U1, U2, U3, U4, U5, tol, rtol)
         # print(rho)
         # print(np.linalg.norm(r))
 
+
+        if verbose:
+            print(out_fmt % (k, r_k, s_k, eps_pri, eps_dual))
+
         if k>=1:
-            if np.linalg.norm(r) <= eps_pri and np.linalg.norm(s) <= eps_dual:
+            if r_k <= eps_pri and s_k <= eps_dual:
                 stat = 1
                 it = k
                 break
@@ -139,7 +151,7 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_fo
     return Om, Gam, D, stat, it
 
 
-def la_admm_tagl(S, A, lam1, lam2, rho, t, K, tol, rtol=1e-3):
+def la_admm_tagl(S, A, lam1, lam2, rho, t, K, tol, rtol=1e-3, verbose=False):
     p = len(S)
     T = len(A[0])
     Om = np.zeros((p, p))
@@ -148,7 +160,7 @@ def la_admm_tagl(S, A, lam1, lam2, rho, t, K, tol, rtol=1e-3):
     Atilde, A_for_gamma, A_for_B, C, C_for_D = tl.A_precompute(A, p, T)
     stat = 0
     for l in range(K):
-        Om, Gam, D, stat, it = admm_tagl(S, A, lam1, lam2, rho, t, Om, Gam, A_for_gamma, A_for_B, C, C_for_D, tol, rtol)
+        Om, Gam, D, stat, it = admm_tagl(S, A, lam1, lam2, rho, t, Om, Gam, A_for_gamma, A_for_B, C, C_for_D, tol, rtol, verbose)
 
         # Update penalty parameter
         rho = 2 * rho

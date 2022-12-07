@@ -60,9 +60,11 @@ def test_example_tree_glasso():
     S = np.zeros((5, 5))
     S[:3, :3] = W @ W.T
     S[3:, 3:] = V @ V.T
-    Omega, Gamma, D = la_admm_tagl(S, A, 1e-7, 1, 1, 100, 10, 1e-7, 1e-4)
-    sol, info = ADMM_SGL(S, 1, np.zeros((5, 5)))
+    Omega, Gamma, D = la_admm_tagl(S, A, 0, 1, 1, 100, 10, 1e-7, 1e-4, verbose=True)
+    sol, info = ADMM_SGL(S, 1, np.zeros((5, 5)), verbose=True)
     Omega2 = sol.get('Omega')
+    print("Omega tag-lasso: ", Omega)
+    print("Omega SGL: ", Omega2)
     for i in range(5):
         Omega[i][i] = 1
         Omega2[i][i] = 1
@@ -87,7 +89,7 @@ def test():
     return
 
 
-test()
-test_example_tree_big_lambda2()
-test_example_tree_big_lambda1()
+#test()
+#test_example_tree_big_lambda2()
+#test_example_tree_big_lambda1()
 test_example_tree_glasso()
