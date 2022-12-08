@@ -13,11 +13,11 @@ def test_example_tree_big_lambda2():
     A[:, 5] = v
     A[:, 6] = w
     A[:, 7] = np.ones(5)
-    W = np.random.rand(2)
-    V = np.random.rand(3)
+    W = np.random.rand(2,2)
+    V = np.random.rand(3,3)
     S = np.zeros((5, 5))
-    S[:3, :3] = W @ W.T
-    S[3:, 3:] = V @ V.T
+    S[:3, :3] = V @ V.T
+    S[3:, 3:] = W @ W.T
     Omega, Gamma, D = la_admm_tagl(S, A, 1, 100, 1, 100, 10, 1e-5, 1e-5)
     for i in range(5):
         Omega[i][i] = 1
@@ -33,8 +33,8 @@ def test_example_tree_big_lambda1():
     A[:, 5] = v
     A[:, 6] = w
     A[:, 7] = np.ones(5)
-    W = np.random.rand(2)
-    V = np.random.rand(3)
+    S[:3, :3] = V @ V.T
+    S[3:, 3:] = W @ W.T
     S = np.zeros((5, 5))
     S[:3, :3] = W @ W.T
     S[3:, 3:] = V @ V.T
@@ -55,19 +55,25 @@ def test_example_tree_glasso():
     A[:, 5] = v
     A[:, 6] = w
     A[:, 7] = np.ones(5)
-    W = np.random.rand(2)
-    V = np.random.rand(3)
+    np.random.seed(10)
+    W = np.random.rand(2,2)
+    np.random.seed(10)
+    V = np.random.rand(3,3)
     S = np.zeros((5, 5))
-    S[:3, :3] = W @ W.T
-    S[3:, 3:] = V @ V.T
-    Omega, Gamma, D = la_admm_tagl(S, A, 0, 1, 1, 100, 10, 1e-7, 1e-4, verbose=True)
+    S[:3, :3] = V @ V.T
+    S[3:, 3:] = W @ W.T
+    Omega, Gamma, D = la_admm_tagl(S, A, 0, 1, 1, 100, 40, 1e-7, 1e-5, verbose=True)
     sol, info = ADMM_SGL(S, 1, np.zeros((5, 5)), verbose=True)
     Omega2 = sol.get('Omega')
-    print("Omega tag-lasso: ", Omega)
-    print("Omega SGL: ", Omega2)
     for i in range(5):
         Omega[i][i] = 1
         Omega2[i][i] = 1
+    for i in range(5):
+        for j in range(5):
+            if np.abs(Omega[i][j]) <= 1e-5:
+                Omega[i][j] = 0
+    print("Omega tag-lasso: ", Omega)
+    print("Omega SGL: ", Omega2)
     assert_array_almost_equal(Omega, Omega2, 5)
     return
 
@@ -80,11 +86,11 @@ def test():
     A[:, 5] = v
     A[:, 6] = w
     A[:, 7] = np.ones(5)
-    W = np.random.rand(2)
-    V = np.random.rand(3)
+    W = np.random.rand(2,2)
+    V = np.random.rand(3,3)
     S = np.zeros((5, 5))
-    S[:3, :3] = W @ W.T
-    S[3:, 3:] = V @ V.T
+    S[:3, :3] = V @ V.T
+    S[3:, 3:] = W @ W.T
     print(la_admm_tagl(S, A, 1, 1, 1, 100, 10, 1e-7, 1e-4))
     return
 
