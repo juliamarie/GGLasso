@@ -1,9 +1,18 @@
 import numpy as np
 from numpy.testing import assert_array_almost_equal
+import pandas as pd
+from rpy2 import robjects
+from rpy2.robjects.packages import importr
+from rpy2.robjects import pandas2ri
+
+from rpy2.robjects.conversion import localconverter
 
 from gglasso.solver.tagl_admm_solver import la_admm_tagl
 from gglasso.solver.single_admm_solver import ADMM_SGL
 
+usethis = importr('usethis')
+devtools = importr('devtools')
+taglasso = importr('taglasso')
 
 def test_example_tree_big_lambda2():
     A = np.zeros((5, 8))
@@ -33,11 +42,11 @@ def test_example_tree_big_lambda1():
     A[:, 5] = v
     A[:, 6] = w
     A[:, 7] = np.ones(5)
+    W = np.random.rand(2, 2)
+    V = np.random.rand(3, 3)
+    S = np.zeros((5, 5))
     S[:3, :3] = V @ V.T
     S[3:, 3:] = W @ W.T
-    S = np.zeros((5, 5))
-    S[:3, :3] = W @ W.T
-    S[3:, 3:] = V @ V.T
     Omega, Gamma, D = la_admm_tagl(S, A, 100, 1, 1, 100, 10, 1e-5, 1e-5)
     Omega2 = np.zeros((5, 5))
     Omega2.fill(Gamma[1][1])
@@ -72,10 +81,40 @@ def test_example_tree_glasso():
         for j in range(5):
             if np.abs(Omega[i][j]) <= 1e-5:
                 Omega[i][j] = 0
+            if np.abs(Omega2[i][j]) <= 1e-5:
+                Omega2[i][j] = 0
     print("Omega tag-lasso: ", Omega)
     print("Omega SGL: ", Omega2)
     assert_array_almost_equal(Omega, Omega2, 5)
     return
+
+
+def test_example_tree_Rcode(lam1, lam2):
+    A = np.zeros((5, 8))
+    A[:5, :5] = np.identity(5)
+    v = [1, 1, 1, 0, 0]
+    w = [0, 0, 0, 1, 1]
+    A[:, 5] = v
+    A[:, 6] = w
+    A[:, 7] = np.ones(5)
+    np.random.seed(10)
+    W = np.random.rand(2, 2)
+    np.random.seed(10)
+    V = np.random.rand(3, 3)
+    S = np.zeros((5, 5))
+    S[:3, :3] = V @ V.T
+    S[3:, 3:] = W @ W.T
+    sdf = pd.DataFrame(S)
+    with localconverter(robjects.default_converter + pandas2ri.converter):
+        r_s = robjects.conversion.py2rpy(sdf)
+    A_vec = A.flatten()
+    r_A_vec = robjects.FloatVector(A_vec)
+    r_a = robjects.r['matrix'](r_A_vec, nrow=5)
+
+    tag_lasso = robjects.r['taglasso']
+    print(S)
+    print(la_admm_tagl(S, A, lam1, lam2, 1, 100, 10, 1e-7, 1e-20, verbose=True))
+    print(tag_lasso(X=r_s, A=r_a, lambda1=lam1, lambda2=lam2, rho=1, it_in=100, it_out=10))
 
 
 def test():
@@ -98,4 +137,5 @@ def test():
 #test()
 #test_example_tree_big_lambda2()
 #test_example_tree_big_lambda1()
-test_example_tree_glasso()
+#test_example_tree_glasso()
+test_example_tree_Rcode(1,1)
