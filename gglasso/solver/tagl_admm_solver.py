@@ -1,5 +1,6 @@
 import numpy as np
 
+
 from gglasso.solver.ggl_helper import prox_1norm
 
 
@@ -24,8 +25,7 @@ def groupwise_st(gamma, lamb):
 
 
 def diag_max(C, p):
-    D = np.zeros((p, p))
-    np.fill_diagonal(D, np.diagonal(np.maximum(0., C)))
+    D = np.diag(np.maximum(np.zeros(len(C)), np.diag(C)))
     # for i in range(p):
     #     D[i][i] = np.maximum(0, C[i][i])
     return D
@@ -125,32 +125,38 @@ def A_precompute(A, p, T):
     Atilde = np.zeros((p + T, T))
     Atilde[:p] = A
     Atilde[p:] = np.identity(T)
+    A_t = np.zeros((T, p+T))
+    A_t[:,:p] = A.T
+    A_t[:,p:] = np.identity(T)
 
     A_inv = np.linalg.inv(A.T @ A + np.identity(T))
+    Atilde_inv = np.linalg.inv(Atilde.T @ Atilde)
 
-    A_for_gamma = A_inv @ Atilde.T
+    A_for_gamma = A_inv @ A_t
 
-    A_for_B = np.identity(p + T) - Atilde @ A_inv @ Atilde.T
+    A_for_B = np.identity(p + T) - Atilde @ Atilde_inv @ Atilde.T
 
     J = np.zeros((p + T, p))
     J[:p] = np.identity(p)
-    C = J - Atilde @ A_inv @ A.T
+    C = J - (Atilde @ Atilde_inv @ A.T)
+
+    #C_for_D = np.linalg.inv(np.diag(np.diag(C.T@C)))
 
     C_for_D = np.diag(1/np.diag(C.T @ C))
 
     return Atilde, A_for_gamma, A_for_B, C, C_for_D
 
 
-def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_for_D, tol, rtol=1e-4, verbose=False):
+def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma=None, A_for_B=None, C=None, C_for_D=None, tol=1e-5, rtol=1e-4, verbose=False):
     # initialize
     stat = 0
     p = len(S)
     T = len(A[0])
-    U1 = Om0.copy()
-    U2 = Om0.copy()
-    U3 = Om0.copy()
-    U4 = Gam0.copy()
-    U5 = Gam0.copy()
+    U1 = np.zeros((p,p)) #Om0.copy()
+    U2 = np.zeros((p,p)) #Om0.copy()
+    U3 = np.zeros((p,p)) #Om0.copy()
+    U4 = np.zeros((T,p)) #Gam0.copy()
+    U5 = np.zeros((T,p)) #Gam0.copy()
     Om1 = np.zeros((p, p))  # Om0.copy()
     Om2 = np.zeros((p, p))  # Om0.copy()
     Om3 = np.zeros((p, p))  # Om0.copy()
@@ -160,6 +166,9 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_fo
     Gam = Gam0.copy()  # np.zeros((T, p))  # Gam0.copy()#np.ones((T,p))
     D = np.zeros((p, p))
     it = 100000
+
+    if A_for_gamma is None:
+        Atilde, A_for_gamma, A_for_B, C, C_for_D = A_precompute(A, p, T)
 
     hdr_fmt = "%4s\t%10s\t%10s\t%10s\t%10s"
     out_fmt = "%4d\t%10.4g\t%10.4g\t%10.4g\t%10.4g"
@@ -196,19 +205,19 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_fo
         # assert (np.linalg.norm(((rho * Om) - U1 - S) - np.transpose((rho * Om) - U1 - S)) <= 1e-10), "Expected symmetry"
         w, Q = np.linalg.eigh(rhs)
         L = np.zeros((p, p))
-        print("rhs: ", rhs)
+        #print("rhs: ", rhs)
         np.fill_diagonal(L, w)
-        print("Versuch: ", Q @ L @ Q.T)
+        #print("Versuch: ", Q @ L @ Q.T)
         delta_omega = get_eigenvalues(w, p, rho)
         Om1 = Q @ delta_omega @ Q.T
-        print("Omega 1:", Om1)
+        #print("Omega 1:", Om1)
 
         # Udate \Omega^{(3)} by soft-thresholding
         Om3 = prox_1norm(Om - U3 / rho, lam2 / rho)
         o = Om - U3 / rho
         for i in range(p):
             Om3[i][i] = o[i][i]
-        print("Omega 3: ", Om3)
+        #print("Omega 3: ", Om3)
 
         # Update \Gamma^{(1)} by groupwise soft-thresholding
         if lam1 == 0:
@@ -216,8 +225,8 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_fo
         else:
             for i in range(0, p - 1):
                 Gam1[i] = groupwise_st(Gam[i] - U4[i] / rho, lam1 / rho)
-        Gam1[p - 1] = (Gam[p - 1] - U4[p - 1] / rho).sum() / p
-        print("Gamma 1: ", Gam1)
+        Gam1[p - 1] = (Gam[p - 1] - U4[p - 1] / rho).mean()
+        #print("Gamma 1: ", Gam1)
 
         # Update D, \Gamma^{(2)} and \Omega^{(2)}
         Mtilde = np.zeros((T + p, p))
@@ -227,35 +236,35 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_fo
         # B = (np.identity(p + T) - (Atilde @ AtildeInv @ Atilde.T)) @ Mtilde
         # D = np.linalg.inv(tl.diag(C.T @ C, p)) * tl.diag_max(B.T @ C, p)
         D = C_for_D @ diag_max(B.T @ C, p)
-        print("D:", D)
+        #print("D:", D)
         assert (D >= 0).all(), "D should have only positive entries"
         Dtilde = np.zeros((p + T, p))
         Dtilde[:p] = D
         # Gam2 = AtildeInv @ Atilde.T @ (Mtilde - Dtilde)
         Gam2 = A_for_gamma @ (Mtilde - Dtilde)
-        print("Gamma 2: ", Gam2)
+        #print("Gamma 2: ", Gam2)
         Om2 = (A @ Gam2) + D
-        print("Omega 2: ", Om2)
+        #print("Omega 2: ", Om2)
 
         # Update \Omega
         Om = (Om1 + Om2 + Om3) / 3
-        print("Omega: ", Om)
+        #print("Omega: ", Om)
 
         # Update \Gamma
         Gam = (Gam1 + Gam2) / 2
-        print("Gamma: ", Gam)
+        #print("Gamma: ", Gam)
 
         # Update U1, U2, U3, U4 and U5
         U1 = U1 + rho * (Om1 - Om)
-        print("U 1: ", U1)
+        #print("U 1: ", U1)
         U2 = U2 + rho * (Om2 - Om)
-        print("U 2: ", U2)
+        #print("U 2: ", U2)
         U3 = U3 + rho * (Om3 - Om)
-        print("U 3: ", U3)
+        #print("U 3: ", U3)
         U4 = U4 + rho * (Gam1 - Gam)
-        print("U 4: ", U4)
+        #print("U 4: ", U4)
         U5 = U5 + rho * (Gam2 - Gam)
-        print("U 5: ", U5)
+        #print("U 5: ", U5)
 
         s = s_k(Om, Gam, Om_old, Gam_old, rho)
         s_k_n = np.linalg.norm(s)
@@ -275,7 +284,7 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma, A_for_B, C, C_fo
                 it = k
                 break
 
-    return Om, Gam, D, stat, it
+    return Om, Gam, D, Om1, Om2, Om3, Gam1, Gam2, U1, U2, U3, U4, U5, stat, it
 
 
 def la_admm_tagl(S, A, lam1, lam2, rho, t, K, tol, rtol=1e-3, verbose=False):
@@ -287,7 +296,7 @@ def la_admm_tagl(S, A, lam1, lam2, rho, t, K, tol, rtol=1e-3, verbose=False):
     Atilde, A_for_gamma, A_for_B, C, C_for_D = A_precompute(A, p, T)
     stat = 0
     for l in range(K):
-        Om, Gam, D, stat, it = admm_tagl(S, A, lam1, lam2, rho, t, Om, Gam, A_for_gamma, A_for_B, C, C_for_D, tol, rtol,
+        Om, Gam, D, Om1, Om2, Om3, Gam1, Gam2, U1, U2, U3, U4, U5,stat, it = admm_tagl(S, A, lam1, lam2, rho, t, Om, Gam, A_for_gamma, A_for_B, C, C_for_D, tol, rtol,
                                          verbose)
 
         # Update penalty parameter
