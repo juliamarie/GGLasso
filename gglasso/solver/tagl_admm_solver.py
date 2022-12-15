@@ -24,7 +24,7 @@ def groupwise_st(gamma, lamb):
     return res
 
 
-def diag_max(C, p):
+def diag_max(C):
     D = np.diag(np.maximum(np.zeros(len(C)), np.diag(C)))
     # for i in range(p):
     #     D[i][i] = np.maximum(0, C[i][i])
@@ -131,14 +131,25 @@ def A_precompute(A, p, T):
 
     A_inv = np.linalg.inv(A.T @ A + np.identity(T))
     Atilde_inv = np.linalg.inv(Atilde.T @ Atilde)
+    #print("Atilde_inv: ")
+    #print(Atilde_inv)
+    #print("A_inv: ")
+    #print(A_inv)
 
     A_for_gamma = A_inv @ A_t
-
+    #print("Atilde @ Atilde_inv @ Atilde.T")
+    #print(np.diag(Atilde @ Atilde_inv @ Atilde.T))
     A_for_B = np.identity(p + T) - Atilde @ Atilde_inv @ Atilde.T
+    #print("A_for_B")
+    #print(np.diag(A_for_B))
 
     J = np.zeros((p + T, p))
     J[:p] = np.identity(p)
+    #print("Atilde @ Atilde_inv @ A.T")
+    #print(Atilde @ Atilde_inv @ A.T)
     C = J - (Atilde @ Atilde_inv @ A.T)
+    #print("C")
+    #print(C)
 
     #C_for_D = np.linalg.inv(np.diag(np.diag(C.T@C)))
 
@@ -223,9 +234,9 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma=None, A_for_B=Non
         if lam1 == 0:
             Gam1 = Gam - U4 / rho
         else:
-            for i in range(0, p - 1):
+            for i in range(0, T - 1):
                 Gam1[i] = groupwise_st(Gam[i] - U4[i] / rho, lam1 / rho)
-        Gam1[p - 1] = (Gam[p - 1] - U4[p - 1] / rho).mean()
+        Gam1[T - 1] = (Gam[T - 1] - U4[T - 1] / rho).mean()
         #print("Gamma 1: ", Gam1)
 
         # Update D, \Gamma^{(2)} and \Omega^{(2)}
@@ -235,7 +246,7 @@ def admm_tagl(S, A, lam1, lam2, rho, t, Om0, Gam0, A_for_gamma=None, A_for_B=Non
         B = A_for_B @ Mtilde
         # B = (np.identity(p + T) - (Atilde @ AtildeInv @ Atilde.T)) @ Mtilde
         # D = np.linalg.inv(tl.diag(C.T @ C, p)) * tl.diag_max(B.T @ C, p)
-        D = C_for_D @ diag_max(B.T @ C, p)
+        D = C_for_D @ diag_max(B.T @ C)
         #print("D:", D)
         assert (D >= 0).all(), "D should have only positive entries"
         Dtilde = np.zeros((p + T, p))
